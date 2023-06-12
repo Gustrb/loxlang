@@ -125,7 +125,7 @@ public class Parser {
         return tokens.get(current - 1);
     }
 
-    private ParseError error(final Token token, String message) {
+    private ParseError error(final Token token, final String message) {
         Lox.error(token, message);
         return new ParseError();
     }
