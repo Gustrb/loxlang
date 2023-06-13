@@ -70,6 +70,8 @@ public class Scanner {
                 if (match('/')) {
                     // skip the comment :P
                     while (peek() != '\n' && !isAtEnd()) advance();
+                } else if(match('*')) {
+                    skipMultilineComment();
                 } else {
                     addToken(TokenType.SLASH);
                 }
@@ -171,6 +173,22 @@ public class Scanner {
 
     private char advance() {
         return source.charAt(current++);
+    }
+
+    private void skipMultilineComment() {
+        while (peek() != '*' && peekNext() != '/' && !isAtEnd()) {
+            final var c = peek();
+            if (c == '\n') line++;
+            advance();
+        }
+
+        if (isAtEnd()) {
+            Lox.error(line, "Unfinished multiple line comment.");
+            return;
+        }
+
+        advance();
+        advance();
     }
 
     private void addToken(TokenType type) {
