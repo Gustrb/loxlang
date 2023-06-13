@@ -1,11 +1,15 @@
 package org.gustrb.lox;
 
-public class Interpreter implements Expr.Visitor<Object> {
+import java.util.List;
 
-    public void interpret(Expr expression) {
+public class Interpreter implements Expr.Visitor<Object>,
+        Stmt.Visitor<Void> {
+    private Environment environment = new Environment();
+
+    public void interpret(List<Stmt> statements) {
         try {
-            final var value = evaluate(expression);
-            System.out.println(stringfy(value));
+            for (final var statement : statements)
+                execute(statement);
         } catch(RuntimeError e) {
             Lox.runtimeError(e);
         }
@@ -34,6 +38,11 @@ public class Interpreter implements Expr.Visitor<Object> {
 
         // Unreachable, I hope
         return null;
+    }
+
+    @Override
+    public Object visitVariableExpr(Expr.Variable expr) {
+        return environment.get(expr.name);
     }
 
     private void checkNumberOperand(final Token operator, final Object operand) {
@@ -100,6 +109,35 @@ public class Interpreter implements Expr.Visitor<Object> {
         return null;
     }
 
+    @Override
+    public Void visitExpressionStmt(Stmt.Expression stmt) {
+        evaluate(stmt.expression);
+        return null;
+    }
+
+    @Override
+    public Void visitPrintStmt(Stmt.Print stmt) {
+        final var value = evaluate(stmt.expression);
+        System.out.println(stringfy(value));
+        return null;
+    }
+
+    @Override
+    public Void visitVarStmt(Stmt.Var stmt) {
+        final var value = stmt.initializer != null
+                ? evaluate(stmt.initializer)
+                : null;
+        environment.define(stmt.name.lexeme, value);
+        return null;
+    }
+
+    @Override
+    public Object visitAssignExpr(Expr.Assign expr) {
+        final var val = evaluate(expr.value);
+        environment.assign(expr.name, val);
+        return val;
+    }
+
     private boolean isTruthy(final Object object) {
         if (object == null) return false;
         if (object instanceof Boolean) return (boolean) object;
@@ -128,5 +166,26 @@ public class Interpreter implements Expr.Visitor<Object> {
 
     private Object evaluate(final Expr expr) {
         return expr.accept(this);
+    }
+
+    private void execute(final Stmt stmt) {
+        stmt.accept(this);
+    }
+
+    @Override
+    public Void visitBlockStmt(final Stmt.Block stmt) {
+        executeBlock(stmt.statements, new Environment(environment));
+        return null;
+    }
+
+    private void executeBlock(final List<Stmt> statements, final Environment environment) {
+        final var previous = this.environment;
+        try {
+            this.environment = environment;
+            for (final var stmt : statements)
+                execute(stmt);
+        } finally {
+            this.environment = previous;
+        }
     }
 }
