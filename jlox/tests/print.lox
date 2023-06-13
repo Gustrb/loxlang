@@ -1,0 +1,7 @@
+var a = "this is a nice lox file";
+print a;
+{
+    var a = "this is other variable";
+    print a;
+}
+print a;

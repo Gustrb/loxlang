@@ -1,0 +1,18 @@
+var a = 2;
+var b = 1;
+
+if (a < b) {
+    var message = "a is smaller than b";
+    print message;
+} else {
+    var message = "b is smaller or equal to a";
+    print message;
+}
+
+if (a > b) {
+    var message = "a is greater than b";
+    print message;
+} else {
+    var message = "a is smaller or equal to b";
+    print message;
+}

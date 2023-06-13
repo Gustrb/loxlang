@@ -1,0 +1,11 @@
+var n = 2;
+var even_no = true;
+for (var i = 0; i < n; i = i + 1) {
+    even_no = !even_no;
+}
+
+if (even_no) {
+    print "Even";
+} else {
+    print "Odd";
+}
