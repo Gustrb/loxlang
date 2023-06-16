@@ -1,0 +1,5 @@
+fun say_hi(first_name, surname) {
+    print "Hi " + first_name + " " + surname + "!";
+}
+
+say_hi("Gustavo", "Bauer");
