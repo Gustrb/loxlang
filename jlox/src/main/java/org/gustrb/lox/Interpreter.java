@@ -1,10 +1,13 @@
 package org.gustrb.lox;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Interpreter implements Expr.Visitor<Object>,
         Stmt.Visitor<Void> {
+    private final Map<Expr, Integer> locals = new HashMap<>();
     final Environment globals = new Environment();
     private Environment environment = globals;
 
@@ -71,7 +74,16 @@ public class Interpreter implements Expr.Visitor<Object>,
 
     @Override
     public Object visitVariableExpr(Expr.Variable expr) {
-        return environment.get(expr.name);
+        return lookupVariable(expr.name, expr);
+    }
+
+    private Object lookupVariable(final Token name, final Expr expr) {
+        final var distance = locals.get(expr);
+        if (distance != null) {
+            return environment.getAt(distance, name.lexeme);
+        }
+
+        return globals.get(name);
     }
 
     private void checkNumberOperand(final Token operator, final Object operand) {
@@ -223,7 +235,14 @@ public class Interpreter implements Expr.Visitor<Object>,
     @Override
     public Object visitAssignExpr(Expr.Assign expr) {
         final var val = evaluate(expr.value);
-        environment.assign(expr.name, val);
+        final Integer distance = locals.get(expr);
+
+        if (distance != null) {
+            environment.assignAt(distance, expr.name, val);
+        } else {
+            globals.assign(expr.name, val);
+        }
+
         return val;
     }
 
@@ -276,5 +295,9 @@ public class Interpreter implements Expr.Visitor<Object>,
         } finally {
             this.environment = previous;
         }
+    }
+
+    public void resolve(final Expr expr, final int depth) {
+        locals.put(expr, depth);
     }
 }
