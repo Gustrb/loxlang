@@ -1,0 +1,4 @@
+class IHaveProperties {}
+
+var instance = IHaveProperties();
+instance.name = "gustavo";

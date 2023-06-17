@@ -1,0 +1,50 @@
+class Node {
+    init(next, val) {
+        this.next = next;
+        this.val = val;
+    }
+}
+
+class LinkedList {
+    init() {
+        this.head = nil;
+        this.size = 0;
+        this.tail = nil;
+    }
+
+    push(val) {
+        this.size = this.size + 1;
+        if (this.head == nil) {
+            this.head = Node(nil, val);
+            this.tail = this.head;
+            return;
+        }
+
+        var aux = this.head;
+        while (aux.next != nil) {
+            aux = aux.next;
+        }
+
+        var new_node = Node(nil, val);
+        aux.next = new_node;
+        this.tail = new_node;
+    }
+
+    contains(val) {
+        var aux = this.head;
+        while (aux != nil) {
+            if (aux.val == val) {
+                return true;
+            }
+            aux = aux.next;
+        }
+
+        return false;
+    }
+}
+
+var list = LinkedList();
+list.push(10);
+
+print list.contains(10);
+print list.contains(5);

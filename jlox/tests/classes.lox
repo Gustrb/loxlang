@@ -1,0 +1,13 @@
+class Car {
+    init(brand, price_tag) {
+        this.brand = brand;
+        this.price_tag = price_tag;
+    }
+
+    getTag() {
+        return this.price_tag;
+    }
+}
+
+var toyota = Car("toyota", 12000);
+print toyota.getTag();

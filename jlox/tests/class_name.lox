@@ -1,0 +1,7 @@
+class NothingButAScratch {
+}
+
+var a_scratch = NothingButAScratch();
+
+print NothingButAScratch;
+print a_scratch;

@@ -1,0 +1,7 @@
+class Breakfast {
+    what_should_i_eat(food) {
+        print "you should eat " + food + "!";
+    }
+}
+
+Breakfast().what_should_i_eat("bacon");
