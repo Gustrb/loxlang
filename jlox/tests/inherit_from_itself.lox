@@ -1,0 +1,4 @@
+class Oops < Oops {}
+
+var ops = Oops();
+print ops;

@@ -1,0 +1,15 @@
+class Person {
+    sayName(name) {
+        print name;
+    }
+}
+
+class Gustavo < Person {
+    sayName(name) {
+        print "Gustavo said: ";
+        super.sayName(name);
+    }
+}
+
+var g = Gustavo();
+g.sayName("reis bauer");

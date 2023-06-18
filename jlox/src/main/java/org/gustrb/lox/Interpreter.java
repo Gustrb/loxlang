@@ -183,7 +183,21 @@ public class Interpreter implements Expr.Visitor<Object>,
 
     @Override
     public Void visitClassStmt(Stmt.Class stmt) {
+        Object superclass = null;
+
+        if (stmt.superclass != null) {
+            superclass = evaluate(stmt.superclass);
+            if (!(superclass instanceof LoxClass)) {
+                throw new RuntimeError(stmt.superclass.name, "Superclass must be a class");
+            }
+        }
+
         environment.define(stmt.name.lexeme, null);
+
+        if (stmt.superclass != null) {
+            environment = new Environment(environment);
+            environment.define("super", superclass);
+        }
 
         final Map<String, LoxFunction> methods = new HashMap<>();
         for (final var method : stmt.methods) {
@@ -191,7 +205,12 @@ public class Interpreter implements Expr.Visitor<Object>,
             methods.put(method.name.lexeme, function);
         }
 
-        final var klass = new LoxClass(stmt.name.lexeme, methods);
+        final var klass = new LoxClass(stmt.name.lexeme, (LoxClass) superclass, methods);
+
+        if (superclass != null) {
+            environment = environment.enclosing;
+        }
+
         environment.assign(stmt.name, klass);
         return null;
     }
@@ -287,6 +306,20 @@ public class Interpreter implements Expr.Visitor<Object>,
     @Override
     public Object visitThisExpr(final Expr.This expr) {
         return lookupVariable(expr.keyword, expr);
+    }
+
+    @Override
+    public Object visitSuperExpr(final Expr.Super expr) {
+        int distance = locals.get(expr);
+        final var superclass = (LoxClass) environment.getAt(distance, "super");
+        final var object = (LoxInstance) environment.getAt(distance -  1, "this");
+        final var method = superclass.findMethod(expr.method.lexeme);
+
+        if (method == null) {
+            throw new RuntimeError(expr.method, "Undefined property '" + expr.method.lexeme + "'.");
+        }
+
+        return method.bind(object);
     }
 
     private boolean isTruthy(final Object object) {

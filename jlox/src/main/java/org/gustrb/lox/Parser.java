@@ -39,6 +39,13 @@ public class Parser {
 
     private Stmt classDeclaration() {
         final var name = consume(TokenType.IDENTIFIER, "Expect class name.");
+
+        Expr.Variable superClass = null;
+        if (match(TokenType.LESS)) {
+            consume(TokenType.IDENTIFIER, "Expect superclass name.");
+            superClass = new Expr.Variable(previous());
+        }
+
         consume(TokenType.LEFT_BRACE, "Expect '{' before class body");
 
         final List<Stmt.Function> methods = new ArrayList<>();
@@ -46,7 +53,7 @@ public class Parser {
             methods.add(function("method"));
 
         consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
-        return new Stmt.Class(name, methods);
+        return new Stmt.Class(name, superClass, methods);
     }
 
     private Stmt statement() {
@@ -314,6 +321,13 @@ public class Parser {
         if (match(TokenType.NIL)) return new Expr.Literal(null);
 
         if (match(TokenType.THIS)) return new Expr.This(previous());
+        if (match(TokenType.SUPER)) {
+            final var keyword = previous();
+            consume(TokenType.DOT, "Expect '.' after 'super'.");
+            final var method = consume(TokenType.IDENTIFIER, "Expect superclass method name");
+            return new Expr.Super(keyword, method);
+        }
+
         if (match(TokenType.NUMBER, TokenType.STRING)) return new Expr.Literal(previous().literal);
         if (match(TokenType.IDENTIFIER)) return new Expr.Variable(previous());
 
