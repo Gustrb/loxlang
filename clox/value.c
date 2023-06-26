@@ -40,12 +40,18 @@ void printValue(Value value) {
 }
 
 bool valuesEqual(Value a, Value b) {
+    // No weird type coercion :D
     if (a.type != b.type) return false;
 
     switch (a.type) {
         case VAL_BOOL:   return AS_BOOL(a) == AS_BOOL(b);
         case VAL_NIL:    return true;
         case VAL_NUMBER: return AS_NUMBER(a) == AS_NUMBER(b);
+        // Since our strings are interned, we can just compare the pointers, which is much faster than comparing the
+        // contents of the strings. And for objects, it is the correct semantics to compare the pointers.
+        // since Point(1, 2, 3) should not be equal to Point(1, 2, 3).
+        // If both of them were equal to (1, 2, 3), then we would have to compare the contents of the objects.
+        // which would be a lot slower.
         case VAL_OBJ:    return AS_OBJ(a) == AS_OBJ(b);
         default:         return false; // Unreachable.
     }

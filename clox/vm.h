@@ -18,6 +18,7 @@ typedef struct {
     Value *stackTop;
     Table strings;
     Obj *objects;
+    Table globals;
 } VM;
 
 typedef enum {

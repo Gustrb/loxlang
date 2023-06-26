@@ -9,6 +9,9 @@
 #include "object.h"
 #include "value.h"
 
+// Defaults to 75% load factor, which seems like a good compromise between
+// memory usage and speed. But I have not benchmarked this, so it's just a
+// guess. :-)
 #define TABLE_MAX_LOAD 0.75
 
 void initTable(Table *table) {
@@ -31,14 +34,17 @@ static Entry *findEntry(Entry *entries, int capacity, ObjString *key) {
 
         if (entry->key == NULL) {
             if (IS_NIL(entry->value)) {
+                // If we are at a tombstone, we can reuse that bucket.
                 return tombstone != NULL ? tombstone : entry;
             } else {
                 if (tombstone == NULL) tombstone = entry;
             }
         } else if (entry->key == key) {
+            // We found the key.
             return entry;
         }
 
+        // Keep looking. (linear probing)
         index = (index + 1) % capacity;
     }
 }
@@ -57,6 +63,8 @@ static void adjustCapacity(Table *table, int capacity) {
         Entry *dest = findEntry(entries, capacity, entry->key);
         dest->key = entry->key;
         dest->value = entry->value;
+
+        // Done so we can account for tombstones. and not copy them as well.
         table->count++;
     }
 
@@ -74,6 +82,8 @@ bool tableSet(Table *table, ObjString *key, Value value) {
 
     Entry *entry = findEntry(table->entries, table->capacity, key);
     bool isNewKey = entry->key == NULL;
+
+    // Only increment count if we are adding a new key(ie. not a tombstone)
     if (isNewKey && IS_NIL(entry->value)) table->count++;
 
     entry->key = key;
