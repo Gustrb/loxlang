@@ -11,8 +11,6 @@
 #include "object.h"
 #include "memory.h"
 
-#undef DEBUG_TRACE_EXECUTION
-
 VM vm;
 
 static void resetStack() {
@@ -73,6 +71,7 @@ void freeVM() {
 
 static InterpretResult run() {
 #define READ_BYTE() (*vm.ip++)
+#define READ_SHORT() (vm.ip += 2, (uint16_t) ((vm.ip[-2] << 8) | vm.ip[-1]))
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 #define BINARY_OP(valueType, op)                      \
 do {                                                  \
@@ -113,6 +112,7 @@ do {                                                  \
                 push(NUMBER_VAL(-AS_NUMBER(pop())));
                 break;
             case OP_ADD: {
+                // TODO: Allow string + number (commutative)
                 if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
                     concatenate();
                 } else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
@@ -149,8 +149,8 @@ do {                                                  \
             }
             case OP_DEFINE_GLOBAL: {
                 ObjString *name = READ_STRING();
-                tableSet(&vm.globals, name, peek(0));
-                pop();
+                tableSet(&vm.globals, name, pop());
+                ;
                 break;
             }
             case OP_GET_GLOBAL: {
@@ -173,14 +173,36 @@ do {                                                  \
                 }
                 break;
             }
-            case OP_RETURN: {
-                pop();
-                return INTERPRET_OK;
+            case OP_GET_LOCAL: {
+                uint8_t slot = READ_BYTE();
+                push(vm.stack[slot]);
+                break;
+            }
+            case OP_SET_LOCAL: {
+                uint8_t slot = READ_BYTE();
+                vm.stack[slot] = peek(0);
+                break;
+            }
+            case OP_JUMP_IF_FALSE: {
+                uint16_t offset = READ_SHORT();
+                if (isFalsey(peek(0))) vm.ip += offset;
+                break;
+            }
+            case OP_JUMP: {
+                uint16_t offset = READ_SHORT();
+                vm.ip += offset;
+                break;
+            }
+            case OP_LOOP: {
+                uint16_t offset = READ_SHORT();
+                vm.ip -= offset;
+                break;
             }
         }
     }
 
 #undef READ_BYTE
+#undef READ_SHORT
 #undef READ_CONSTANT
 #undef BINARY_OP
 #undef READ_STRING

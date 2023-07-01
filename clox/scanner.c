@@ -166,8 +166,6 @@ static Token string() {
     return makeToken(TOKEN_STRING);
 }
 
-
-
 static Token number() {
     while (isDigit(peek())) advance();
 
