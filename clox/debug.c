@@ -2,8 +2,10 @@
 // Created by gustrb on 25/06/23.
 //
 #include <stdio.h>
+
 #include "debug.h"
 #include "value.h"
+#include "object.h"
 
 void disassembleChunk(Chunk *chunk, const char *name) {
     printf("== %s ==\n", name);
@@ -107,8 +109,20 @@ int disassembleInstruction(Chunk *chunk, int offset) {
             printf("%-16s %4d ", "OP_CLOSURE", constant);
             printValue(chunk->constants.values[constant]);
             printf("\n");
+
+            ObjFunction *function = AS_FUNCTION(chunk->constants.values[constant]);
+            for (int j = 0; j < function->upvalueCount; ++j) {
+                int isLocal = chunk->code[offset++];
+                int index = chunk->code[offset++];
+                printf("%04d      |                     %s %d\n", offset - 2, isLocal ? "local" : "upvalue", index);
+            }
+
             return offset;
         }
+        case OP_GET_UPVALUE:
+            return byteInstruction("OP_GET_UPVALUE", chunk, offset);
+        case OP_SET_UPVALUE:
+            return byteInstruction("OP_SET_UPVALUE", chunk, offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
