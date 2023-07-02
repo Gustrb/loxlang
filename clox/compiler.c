@@ -37,6 +37,7 @@ typedef struct {
 typedef enum {
     TYPE_FUNCTION,
     TYPE_SCRIPT,
+    TYPE_METHOD,
 } FunctionType;
 
 typedef struct Compiler {
@@ -50,6 +51,10 @@ typedef struct Compiler {
     int localCount;
     int scopeDepth;
 } Compiler;
+
+typedef struct ClassCompiler {
+    struct ClassCompiler *enclosing;
+} ClassCompiler;
 
 typedef enum {
     PREC_NONE,
@@ -75,6 +80,7 @@ typedef struct {
 
 static Parser parser;
 static Compiler *current = NULL;
+static ClassCompiler *currentClass = NULL;
 
 static void errorAt(Token *token, const char *message) {
     if (parser.panicMode) return;
@@ -209,6 +215,15 @@ static void initCompiler(Compiler *compiler, FunctionType type) {
     local->depth = 0;
     local->name.start = "";
     local->name.length = 0;
+    local->isCaptured = false;
+
+    if (type != TYPE_FUNCTION) {
+        local->name.start = "this";
+        local->name.length = 4;
+    } else {
+        local->name.start = "";
+        local->name.length = 0;
+    }
 }
 
 static ObjFunction *endCompiler() {
@@ -370,16 +385,115 @@ static void declareVariable() {
     addLocal(*name);
 }
 
+static void method() {
+    consume(TOKEN_IDENTIFIER, "Expect method name.");
+    uint8_t constant = identifierConstant(&parser.previous);
+
+    FunctionType type = TYPE_METHOD;
+    function(type);
+
+    emitBytes(OP_METHOD, constant);
+}
+
+static int resolveLocal(Compiler *compiler, Token *name) {
+    for (int i = compiler->localCount - 1; i >= 0; --i) {
+        Local *local = &compiler->locals[i];
+        if (identifiersEqual(name, &local->name)) {
+            if (local->depth == -1) {
+                error("Cannot read local variable in its own initializer.");
+            }
+
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int addUpvalue(Compiler *compiler, uint8_t index, bool isLocal) {
+    int upvalueCount = compiler->function->upvalueCount;
+
+    for (int i = 0; i < upvalueCount; ++i) {
+        Upvalue *upvalue = &compiler->upvalues[i];
+        if (upvalue->index == index && upvalue->isLocal == isLocal) {
+            return i;
+        }
+    }
+
+    if (upvalueCount == UINT8_COUNT) {
+        error("Too many closure variables in function.");
+        return 0;
+    }
+
+    compiler->upvalues[upvalueCount].isLocal = isLocal;
+    compiler->upvalues[upvalueCount].index = index;
+    return compiler->function->upvalueCount++;
+}
+
+static int resolveUpvalue(Compiler *compiler, Token *name) {
+    if (compiler->enclosing == NULL) return -1;
+
+    int local = resolveLocal(compiler->enclosing, name);
+    if (local != -1) {
+        compiler->enclosing->locals[local].isCaptured = true;
+        return addUpvalue(compiler, (uint8_t) local, true);
+    }
+
+    int upvalue = resolveUpvalue(compiler->enclosing, name);
+    if (upvalue != -1) {
+        return addUpvalue(compiler, (uint8_t) upvalue, false);
+    }
+
+    return -1;
+}
+
+static void namedVariable(Token name, bool canAssign) {
+    uint8_t getOp, setOp;
+    int arg = resolveLocal(current, &name);
+    if (arg != -1) {
+        getOp = OP_GET_LOCAL;
+        setOp = OP_SET_LOCAL;
+    } else if ((arg = resolveUpvalue(current, &name)) != -1) {
+        getOp = OP_GET_UPVALUE;
+        setOp = OP_SET_UPVALUE;
+    } else {
+        arg = identifierConstant(&name);
+        getOp = OP_GET_GLOBAL;
+        setOp = OP_SET_GLOBAL;
+    }
+
+    if (canAssign && match(TOKEN_EQUAL)) {
+        expression();
+        emitBytes(setOp, (uint8_t) arg);
+    } else {
+        emitBytes(getOp, (uint8_t) arg);
+    }
+}
+
 static void classDeclaration() {
     consume(TOKEN_IDENTIFIER, "Expect class name.");
+    Token className = parser.previous;
     uint8_t nameConstant = identifierConstant(&parser.previous);
     declareVariable();
 
     emitBytes(OP_CLASS, nameConstant);
     defineVariable(nameConstant);
 
+    ClassCompiler classCompiler;
+    classCompiler.enclosing = currentClass;
+    currentClass = &classCompiler;
+
+    namedVariable(className, false);
+
     consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+
+    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+        method();
+    }
+
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+    emitByte(OP_POP);
+
+    currentClass = currentClass->enclosing;
 }
 
 static void markInitialized() {
@@ -605,80 +719,6 @@ static void string(bool canAssign) {
                                     parser.previous.length - 2)));
 }
 
-static int resolveLocal(Compiler *compiler, Token *name) {
-    for (int i = compiler->localCount - 1; i >= 0; --i) {
-        Local *local = &compiler->locals[i];
-        if (identifiersEqual(name, &local->name)) {
-            if (local->depth == -1) {
-                error("Cannot read local variable in its own initializer.");
-            }
-
-            return i;
-        }
-    }
-    return -1;
-}
-
-static int addUpvalue(Compiler *compiler, uint8_t index, bool isLocal) {
-    int upvalueCount = compiler->function->upvalueCount;
-
-    for (int i = 0; i < upvalueCount; ++i) {
-        Upvalue *upvalue = &compiler->upvalues[i];
-        if (upvalue->index == index && upvalue->isLocal == isLocal) {
-            return i;
-        }
-    }
-
-    if (upvalueCount == UINT8_COUNT) {
-        error("Too many closure variables in function.");
-        return 0;
-    }
-
-    compiler->upvalues[upvalueCount].isLocal = isLocal;
-    compiler->upvalues[upvalueCount].index = index;
-    return compiler->function->upvalueCount++;
-}
-
-static int resolveUpvalue(Compiler *compiler, Token *name) {
-    if (compiler->enclosing == NULL) return -1;
-
-    int local = resolveLocal(compiler->enclosing, name);
-    if (local != -1) {
-        compiler->enclosing->locals[local].isCaptured = true;
-        return addUpvalue(compiler, (uint8_t) local, true);
-    }
-
-    int upvalue = resolveUpvalue(compiler->enclosing, name);
-    if (upvalue != -1) {
-        return addUpvalue(compiler, (uint8_t) upvalue, false);
-    }
-
-    return -1;
-}
-
-static void namedVariable(Token name, bool canAssign) {
-    uint8_t getOp, setOp;
-    int arg = resolveLocal(current, &name);
-    if (arg != -1) {
-        getOp = OP_GET_LOCAL;
-        setOp = OP_SET_LOCAL;
-    } else if ((arg = resolveUpvalue(current, &name)) != -1) {
-        getOp = OP_GET_UPVALUE;
-        setOp = OP_SET_UPVALUE;
-    } else {
-        arg = identifierConstant(&name);
-        getOp = OP_GET_GLOBAL;
-        setOp = OP_SET_GLOBAL;
-    }
-
-    if (canAssign && match(TOKEN_EQUAL)) {
-        expression();
-        emitBytes(setOp, (uint8_t) arg);
-    } else {
-        emitBytes(getOp, (uint8_t) arg);
-    }
-}
-
 static void variable(bool canAssign) {
     namedVariable(parser.previous, canAssign);
 }
@@ -716,6 +756,15 @@ static void dot(bool canAssign) {
     }
 }
 
+static void this_(bool canAssign) {
+    if (currentClass == NULL) {
+        error("Cannot use 'this' outside of a class.");
+        return;
+    }
+
+    variable(false);
+}
+
 static ParseRule rules[] = {
         [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
         [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
@@ -751,7 +800,7 @@ static ParseRule rules[] = {
         [TOKEN_PRINT]         = {NULL, NULL, PREC_NONE},
         [TOKEN_RETURN]        = {NULL, NULL, PREC_NONE},
         [TOKEN_SUPER]         = {NULL, NULL, PREC_NONE},
-        [TOKEN_THIS]          = {NULL, NULL, PREC_NONE},
+        [TOKEN_THIS]          = {this_, NULL, PREC_NONE},
         [TOKEN_TRUE]          = {literal, NULL, PREC_NONE},
         [TOKEN_VAR]           = {NULL, NULL, PREC_NONE},
         [TOKEN_WHILE]         = {NULL, NULL, PREC_NONE},

@@ -105,6 +105,11 @@ static bool callValue(Value callee, int argCount) {
                 vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(klass));
                 return true;
             }
+            case OBJ_BOUND_METHOD: {
+                ObjBoundMethod *bound = AS_BOUND_METHOD(callee);
+                vm.stackTop[-argCount - 1] = bound->receiver;
+                return call(bound->method, argCount);
+            }
             default:
                 break;
         }
@@ -186,6 +191,25 @@ void freeVM() {
     freeObjects();
 }
 
+static void defineMethod(ObjString *name) {
+    Value method = peek(0);
+    ObjClass *klass = AS_CLASS(peek(1));
+    tableSet(&klass->methods, name, method);
+    pop();
+}
+
+static bool bindMethod(ObjClass *klass, ObjString *name) {
+    Value method;
+    if (!tableGet(&klass->methods, name, &method)) {
+        runtimeError("Undefined property '%s'.", name->chars);
+        return false;
+    }
+
+    ObjBoundMethod *bound = newBoundMethod(peek(0), AS_CLOSURE(method));
+    pop();
+    push(OBJ_VAL(bound));
+    return true;
+}
 
 static InterpretResult run() {
     CallFrame *frame = &vm.frames[vm.frameCount - 1];
@@ -394,6 +418,10 @@ do {                                                  \
                     break;
                 }
 
+                if (!bindMethod(instance->klass, name)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
                 runtimeError("Undefined property '%s'.", name->chars);
                 return INTERPRET_RUNTIME_ERROR;
             }
@@ -402,12 +430,16 @@ do {                                                  \
                     runtimeError("Only instances have fields.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                
+
                 ObjInstance *instance = AS_INSTANCE(peek(1));
                 tableSet(&instance->fields, READ_STRING(), peek(0));
                 Value value = pop();
                 pop();
                 push(value);
+                break;
+            }
+            case OP_METHOD: {
+                defineMethod(READ_STRING());
                 break;
             }
         }
