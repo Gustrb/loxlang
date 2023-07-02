@@ -15,6 +15,8 @@
 VM vm;
 
 static Value clockNative(int argCount, Value *args) {
+    (void) argCount;
+    (void) args;
     return NUMBER_VAL((double) clock() / CLOCKS_PER_SEC);
 }
 
@@ -282,8 +284,7 @@ do {                                                  \
         printf("\n");
         disassembleInstruction(&frame->closure->function->chunk, (int) (frame->ip - frame->closure->function->chunk.code));
 #endif
-        uint8_t instruction;
-        switch (instruction = READ_BYTE()) {
+        switch (READ_BYTE()) {
             case OP_CONSTANT: {
                 Value constant = READ_CONSTANT();
                 push(constant);
@@ -311,15 +312,15 @@ do {                                                  \
 
                 break;
             }
-            case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
-            case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
-            case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, /); break;
+            case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -) break;
+            case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *) break;
+            case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, /) break;
             case OP_NIL:      push(NIL_VAL); break;
             case OP_TRUE:     push(BOOL_VAL(true)); break;
             case OP_FALSE:    push(BOOL_VAL(false)); break;
             case OP_NOT:      push(BOOL_VAL(isFalsey(pop()))); break;
-            case OP_GREATER:  BINARY_OP(BOOL_VAL, >); break;
-            case OP_LESS:     BINARY_OP(BOOL_VAL, <); break;
+            case OP_GREATER:  BINARY_OP(BOOL_VAL, >) break;
+            case OP_LESS:     BINARY_OP(BOOL_VAL, <) break;
             case OP_POP:      pop(); break;
             case OP_EQUAL: {
                 Value b = pop();
@@ -335,7 +336,6 @@ do {                                                  \
             case OP_DEFINE_GLOBAL: {
                 ObjString *name = READ_STRING();
                 tableSet(&vm.globals, name, pop());
-                ;
                 break;
             }
             case OP_GET_GLOBAL: {
