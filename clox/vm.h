@@ -23,6 +23,8 @@ typedef struct {
     CallFrame frames[FRAMES_MAX];
     int frameCount;
 
+    ObjUpvalue *openUpvalues;
+
     Chunk *chunk;
     uint8_t *ip;
     Value stack[STACK_MAX];
