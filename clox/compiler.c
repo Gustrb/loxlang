@@ -328,6 +328,60 @@ static void function(FunctionType type) {
     }
 }
 
+static uint8_t identifierConstant(Token *name) {
+    return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+}
+
+static void addLocal(Token name) {
+    if (current->localCount == UINT8_COUNT) {
+        error("Too many local variables in function.");
+        return;
+    }
+
+    Local *local = &current->locals[current->localCount++];
+    local->name = name;
+    local->depth = -1;
+    local->isCaptured = false;
+}
+
+static bool identifiersEqual(Token *a, Token *b) {
+    if (a->length != b->length) return false;
+    return memcmp(a->start, b->start, a->length) == 0;
+}
+
+static void declareVariable() {
+    // Global variables are implicitly declared.
+    if (current->scopeDepth == 0) return;
+
+    Token *name = &parser.previous;
+
+    for (int i = current->localCount - 1; i >= 0; --i) {
+        Local *local = &current->locals[i];
+
+        if (local->depth != -1 && local->depth < current->scopeDepth) {
+            break;
+        }
+
+        if (identifiersEqual(name, &local->name)) {
+            error("Already variable with this name in this scope.");
+        }
+    }
+
+    addLocal(*name);
+}
+
+static void classDeclaration() {
+    consume(TOKEN_IDENTIFIER, "Expect class name.");
+    uint8_t nameConstant = identifierConstant(&parser.previous);
+    declareVariable();
+
+    emitBytes(OP_CLASS, nameConstant);
+    defineVariable(nameConstant);
+
+    consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+    consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+}
+
 static void markInitialized() {
     if (current->scopeDepth == 0) return;
 
@@ -477,6 +531,8 @@ static void declaration() {
         varDeclaration();
     } else if (match(TOKEN_FUN)) {
         functionDeclaration();
+    } else if(match(TOKEN_CLASS)) {
+        classDeclaration();
     } else {
         statement();
     }
@@ -549,15 +605,6 @@ static void string(bool canAssign) {
                                     parser.previous.length - 2)));
 }
 
-static uint8_t identifierConstant(Token *name) {
-    return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
-}
-
-static bool identifiersEqual(Token *a, Token *b) {
-    if (a->length != b->length) return false;
-    return memcmp(a->start, b->start, a->length) == 0;
-}
-
 static int resolveLocal(Compiler *compiler, Token *name) {
     for (int i = compiler->localCount - 1; i >= 0; --i) {
         Local *local = &compiler->locals[i];
@@ -570,18 +617,6 @@ static int resolveLocal(Compiler *compiler, Token *name) {
         }
     }
     return -1;
-}
-
-static void addLocal(Token name) {
-    if (current->localCount == UINT8_COUNT) {
-        error("Too many local variables in function.");
-        return;
-    }
-
-    Local *local = &current->locals[current->localCount++];
-    local->name = name;
-    local->depth = -1;
-    local->isCaptured = false;
 }
 
 static int addUpvalue(Compiler *compiler, uint8_t index, bool isLocal) {
@@ -733,27 +768,6 @@ static void parsePrecedence(Precedence precedence) {
     if (canAssign && match(TOKEN_EQUAL)) {
         error("Invalid assignment target.");
     }
-}
-
-static void declareVariable() {
-    // Global variables are implicitly declared.
-    if (current->scopeDepth == 0) return;
-
-    Token *name = &parser.previous;
-
-    for (int i = current->localCount - 1; i >= 0; --i) {
-        Local *local = &current->locals[i];
-
-        if (local->depth != -1 && local->depth < current->scopeDepth) {
-            break;
-        }
-
-        if (identifiersEqual(name, &local->name)) {
-            error("Already variable with this name in this scope.");
-        }
-    }
-
-    addLocal(*name);
 }
 
 static void defineVariable(uint8_t global) {
