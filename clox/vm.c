@@ -22,6 +22,10 @@ static void resetStack() {
     vm.stackTop = vm.stack;
     vm.frameCount = 0;
     vm.openUpvalues = NULL;
+
+    vm.grayCount = 0;
+    vm.grayCapacity = 0;
+    vm.grayStack = NULL;
 }
 
 static void runtimeError(const char *format, ...) {
