@@ -26,5 +26,6 @@ ObjString *tableFindString(Table *table, const char *chars, int length, uint32_t
 void tableAddAll(Table *from, Table *to);
 bool tableGet(Table *table, ObjString *key, Value *value);
 bool tableDelete(Table *table, ObjString *key);
+void markTable(Table *table);
 
 #endif //CLOX_TABLE_H
